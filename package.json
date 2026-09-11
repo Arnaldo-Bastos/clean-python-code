@@ -1,0 +1,98 @@
+{
+  "name": "clean-python-code",
+  "displayName": "Clean Python Code",
+  "description": "Personalized Python and PySpark formatting with hierarchical indentation, vertical chains, and aligned nested expressions.",
+  "version": "0.3.10",
+  "publisher": "cleanpythoncode",
+  "license": "MIT",
+  "icon": "icon.png",
+  "pricing": "Free",
+  "categories": [
+    "Formatters",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "python",
+    "pyspark",
+    "formatter",
+    "code formatting",
+    "indentation",
+    "jupyter",
+    "notebook",
+    "data analytics",
+    "data engineering"
+  ],
+  "engines": {
+    "vscode": ">=1.90.0"
+  },
+  "activationEvents": [
+    "onLanguage:python"
+  ],
+  "main": "./extension.js",
+  "galleryBanner": {
+    "color": "#1e293b",
+    "theme": "dark"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "cleanPythonCode.formatSelection",
+        "title": "Clean Python Code: Format Selection",
+        "category": "Clean Python Code"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "cleanPythonCode.formatSelection",
+        "key": "ctrl+i",
+        "when": "editorTextFocus && editorHasSelection && !editorReadonly && editorLangId == python"
+      }
+    ],
+    "configuration": {
+      "title": "Clean Python Code",
+      "properties": {
+        "cleanPythonCode.outerIndent": {
+          "type": "integer",
+          "default": 8,
+          "minimum": 0,
+          "description": "Spaces used for the first continuation line inside an assignment wrapped with parentheses."
+        },
+        "cleanPythonCode.chainIndent": {
+          "type": "integer",
+          "default": 5,
+          "minimum": 0,
+          "description": "Additional spaces used before chained method calls such as .filter() and .select()."
+        },
+        "cleanPythonCode.argumentIndent": {
+          "type": "integer",
+          "default": 9,
+          "minimum": 1,
+          "description": "Additional spaces used for arguments inside expanded calls, lists and dictionaries."
+        },
+        "cleanPythonCode.maxInlineLength": {
+          "type": "integer",
+          "default": 88,
+          "minimum": 40,
+          "description": "Expressions longer than this are preferentially expanded. Chained assignments are expanded even when shorter."
+        },
+        "cleanPythonCode.leadingComma": {
+          "type": "boolean",
+          "default": true,
+          "description": "Place commas at the beginning of subsequent lines in expanded argument lists and collections, matching the reference style."
+        },
+        "cleanPythonCode.expandBooleanOperators": {
+          "type": "boolean",
+          "default": true,
+          "description": "Expand complex boolean expressions using &, |, and Python's and/or operators onto separate lines when appropriate."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "node test/formatter.test.js",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.7.1"
+  }
+}
