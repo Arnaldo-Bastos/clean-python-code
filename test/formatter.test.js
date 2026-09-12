@@ -62,6 +62,13 @@ test('formats code cells in notebook JSON without touching markdown cells', () =
   assert.ok(secondCodeCell.includes("| (F.col('c') == 3)\n"));
 });
 
+test('surfaces invalid notebook json instead of silently no-oping', () => {
+  assert.throws(
+    () => formatNotebookContent('{not valid json'),
+    /could not parse the selected \.ipynb content as notebook JSON/i
+  );
+});
+
 let failures = 0;
 for (const { name, fn } of tests) {
   try {

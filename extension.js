@@ -35,9 +35,15 @@ function activate(context) {
     };
 
     const original = document.getText(selection);
-    const formatted = isNotebookJson
-      ? formatNotebookContent(original, options)
-      : formatSelection(original, options);
+    let formatted;
+    try {
+      formatted = isNotebookJson
+        ? formatNotebookContent(original, options)
+        : formatSelection(original, options);
+    } catch (error) {
+      vscode.window.showErrorMessage(error instanceof Error ? error.message : 'Clean Python Code failed to format the current selection.');
+      return;
+    }
     if (formatted === original) {
       return;
     }

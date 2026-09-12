@@ -369,7 +369,7 @@ function formatBoolean(value, indent, opts, ctx = {}) {
 
   const lines = [renderedOperands[0]];
   for (let j = 0; j < operators.length; j++) {
-    lines.push((ctx.inCallArgument ? '' : sp(indent)) + operators[j] + ' ' + renderedOperands[j + 1]);
+    lines.push(sp(indent) + operators[j] + ' ' + renderedOperands[j + 1]);
   }
   return lines.join('\n').trim();
 }
@@ -544,7 +544,9 @@ function formatCall(callSource, baseIndent, opts, ctx = {}, depth = 0) {
     if (idx > 0 && opts.leadingComma) first = ',' + first;
     lines.push(sp(renderedBase) + first);
     if (multilineBoolean && sub.length > 1) {
-      for (const extra of sub.slice(1)) lines.push(sp(renderedBase) + extra.trim());
+      for (const extra of sub.slice(1)) {
+        lines.push(/^\s/.test(extra) ? extra : sp(renderedBase) + extra.trim());
+      }
       return;
     }
     for (const extra of sub.slice(1)) lines.push(extra);
@@ -880,7 +882,7 @@ function formatNotebookContent(text, options = {}) {
   try {
     notebook = JSON.parse(text);
   } catch {
-    return text;
+    throw new Error('Clean Python Code could not parse the selected .ipynb content as notebook JSON.');
   }
 
   if (!notebook || !Array.isArray(notebook.cells)) return text;
