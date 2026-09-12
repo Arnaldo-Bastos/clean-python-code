@@ -105,7 +105,7 @@ The formatter is designed to be idempotent: applying **Ctrl + I** repeatedly sho
 For local testing:
 
 ```bash
-code --install-extension clean-python-code-0.3.11.vsix
+code --install-extension clean-python-code-0.3.12.vsix
 ```
 
 Or use **Extensions → Views and More Actions (`...`) → Install from VSIX...**.

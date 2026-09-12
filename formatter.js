@@ -1,5 +1,7 @@
 'use strict';
 
+const { spawnSync } = require('node:child_process');
+
 /*
  * Clean Python Code
  * -----------------
@@ -935,6 +937,24 @@ function formatAlreadyWrappedSelection(text, opts) {
   return null;
 }
 
+function validatePythonWithAst(text) {
+  const script = 'import ast,sys\nast.parse(sys.stdin.read())';
+  for (const bin of ['python3', 'python']) {
+    try {
+      const result = spawnSync(bin, ['-c', script], {
+        input: text,
+        encoding: 'utf8',
+        timeout: 2000
+      });
+      if (result.error) continue;
+      if (typeof result.status === 'number') return result.status === 0;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
 function formatSelection(text, options = {}) {
   const opts = { ...DEFAULTS, ...options };
   const wrapped = formatAlreadyWrappedSelection(text, opts);
@@ -944,7 +964,17 @@ function formatSelection(text, options = {}) {
     if (b.type === 'blank' || b.type === 'comment') return b.lines.join('\n');
     return formatStatement(b.lines, opts);
   });
-  return rendered.join('\n').replace(/\n{3,}/g, '\n\n');
+  const output = rendered.join('\n').replace(/\n{3,}/g, '\n\n');
+
+  // When the original selection is valid Python, never return a formatting
+  // result that breaks AST parsing.
+  const originalValidation = validatePythonWithAst(text);
+  const outputValidation = validatePythonWithAst(output);
+  if (originalValidation === true && outputValidation === false) {
+    return text;
+  }
+
+  return output;
 }
 
 module.exports = {

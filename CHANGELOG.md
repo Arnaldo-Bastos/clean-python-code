@@ -1,3 +1,9 @@
+## 0.3.12
+
+- Added notebook fixture coverage for `sample_cases.ipynb` style selections and code-cell formatting assertions.
+- Added explicit test coverage for multiline `where` boolean conditions with aligned `&` and `|` operators.
+- Added a Python `ast` safety guard: when the original selected code is valid Python, the formatter now avoids returning a result that would become syntactically invalid.
+
 ## 0.3.10
 
 - Fixed VSIX deployment manifest namespace for Marketplace publication.

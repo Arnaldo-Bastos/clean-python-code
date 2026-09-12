@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('assert');
+const childProcess = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const { formatNotebookContent, formatSelection } = require('../formatter');
@@ -39,6 +40,34 @@ test('keeps structural keywords intact while formatting nested calls inside bloc
   assert.ok(output.startsWith('if ready:\n'));
   assert.ok(!output.includes('\n('));
   assert.ok(output.includes("    result = foo("));
+});
+
+test('expands where conditions with aligned operators and parenthesized predicates', () => {
+  const input = "df.where((F.col('a')==1) & (F.col('b')==2) | (F.col('c')==3))";
+  const expected = "df.where(\n          (F.col('a')==1)\n          & (F.col('b')==2)\n          | (F.col('c')==3)\n        )";
+
+  assert.strictEqual(formatSelection(input), expected);
+});
+
+test('keeps output parseable with Python AST when input is valid code', () => {
+  const input = "def fn(values):\n    return [v for v in values if v > 0]";
+  const output = formatSelection(input);
+
+  let parsed = false;
+  for (const bin of ['python3', 'python']) {
+    try {
+      childProcess.execFileSync(bin, ['-c', 'import ast,sys;ast.parse(sys.stdin.read())'], {
+        input: output,
+        encoding: 'utf8'
+      });
+      parsed = true;
+      break;
+    } catch {
+      continue;
+    }
+  }
+
+  assert.ok(parsed, 'formatted output should parse with Python AST');
 });
 
 test('formats code cells in notebook JSON without touching markdown cells', () => {
