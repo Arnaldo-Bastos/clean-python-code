@@ -18,6 +18,14 @@ const DEFAULTS = {
   standaloneBaseIndent: 4
 };
 
+const LEADING_EXPRESSION_PREFIXES = [
+  'return',
+  'yield from',
+  'yield',
+  'raise',
+  'await'
+];
+
 function sp(n) { return ' '.repeat(Math.max(0, n)); }
 function trimRight(s) { return s.replace(/[ \t]+$/g, ''); }
 function indentOf(s) { return (s.match(/^[ \t]*/) || [''])[0]; }
@@ -320,10 +328,11 @@ function simpleInlineCollection(s) {
   return s.length <= 42 && items.every(x => !outerCollection(x) && !isChain(x) && !findCall(x) && x.length <= 30);
 }
 
-function formatBoolean(value, indent, opts, depth) {
+function formatBoolean(value, indent, opts, ctx = {}) {
   if (!opts.expandBooleanOperators || !hasTopLevelBoolean(value)) return null;
   const map = scanPairs(value);
-  const pieces = [];
+  const operands = [];
+  const operators = [];
   let start = 0;
   let i = 0;
   while (i < value.length) {
@@ -335,29 +344,34 @@ function formatBoolean(value, indent, opts, depth) {
       if (m) op = m[1];
     }
     if (op) {
-      pieces.push(value.slice(start, i).trim());
-      pieces.push(op);
+      operands.push(value.slice(start, i).trim());
+      operators.push(op);
       i += op.length;
       start = i;
       continue;
     }
     i++;
   }
-  pieces.push(value.slice(start).trim());
-  if (pieces.length < 3) return null;
+  operands.push(value.slice(start).trim());
+  if (operands.length < 2) return null;
 
   // Preserve the user's preferred behavior for short boolean conditions: each
   // operand is grouped, but the operator remains on the same logical line.
-  const rendered = [];
-  for (let j = 0; j < pieces.length; j++) {
-    if (j % 2 === 0) {
-      const operand = pieces[j];
-      rendered.push('(' + operand.replace(/^\((.*)\)$/, '$1').trim() + ')');
-    } else {
-      rendered[rendered.length - 1] += ' ' + pieces[j] + ' ';
-    }
+  const renderedOperands = operands.map(operand => '(' + operand.replace(/^\((.*)\)$/, '$1').trim() + ')');
+  const multiline = Boolean(ctx.inCallArgument || ctx.forceMultiline) &&
+    (renderedOperands.length > 1 || value.length > opts.maxInlineLength);
+
+  if (!multiline) {
+    let inline = renderedOperands[0];
+    for (let j = 0; j < operators.length; j++) inline += ' ' + operators[j] + ' ' + renderedOperands[j + 1];
+    return inline.trim();
   }
-  return rendered.join('').trim();
+
+  const lines = [renderedOperands[0]];
+  for (let j = 0; j < operators.length; j++) {
+    lines.push(sp(indent) + operators[j] + ' ' + renderedOperands[j + 1]);
+  }
+  return lines.join('\n').trim();
 }
 
 function shouldExpandCall(head, args, content, opts, force = false) {
@@ -379,7 +393,10 @@ function formatCollection(s, baseIndent, opts, ctx = {}, depth = 0) {
   const c = outerCollection(s);
   if (!c) return s.trim();
   const items = topLevelCommaParts(c.content).map(x => x.trim()).filter(Boolean);
-  if (!items.length) return c.open + c.close;
+  if (!items.length) {
+    if (ctx.forceCollectionExpand) return [c.open, sp(baseIndent) + c.close].join('\n');
+    return c.open + c.close;
+  }
 
   const force = Boolean(ctx.forceCollectionExpand);
   const dictLike = c.open === '{' && items.some(x => findTopLevelColon(x) >= 0);
@@ -408,7 +425,16 @@ function formatCollection(s, baseIndent, opts, ctx = {}, depth = 0) {
 
     let rendered = dictLike
       ? normalizedItem
-      : formatExpression(item, itemIndent, opts, { inCollection: true }, depth + 1).trim();
+      : formatExpression(
+        item,
+        itemIndent,
+        opts,
+        {
+          inCollection: true,
+          forceCollectionExpand: items.length === 1 && Boolean(outerCollection(item))
+        },
+        depth + 1
+      ).trim();
     const sub = rendered.split('\n');
     let first = sub[0];
     if (idx > 0 && opts.leadingComma) {
@@ -577,7 +603,7 @@ function formatExpression(expr, baseIndent, opts, ctx = {}, depth = 0) {
 
   if (isChain(s)) return formatChain(s, baseIndent, opts, ctx, depth);
 
-  const bool = formatBoolean(s, baseIndent, opts, depth);
+  const bool = formatBoolean(s, baseIndent, opts, ctx);
   if (bool && !ctx.inCollection) return bool;
 
   const call = findCall(s);
@@ -585,6 +611,67 @@ function formatExpression(expr, baseIndent, opts, ctx = {}, depth = 0) {
     return formatCall(s, baseIndent, opts, ctx, depth);
   }
   return normalizeKeywordEquals(s);
+}
+
+function splitLeadingExpressionPrefix(source) {
+  const s = source.trim();
+  for (const prefix of LEADING_EXPRESSION_PREFIXES) {
+    if (s === prefix) {
+      return { prefix, expression: '' };
+    }
+    if (s.startsWith(prefix + ' ')) {
+      return {
+        prefix,
+        expression: s.slice(prefix.length).trim()
+      };
+    }
+  }
+  return null;
+}
+
+function formatPrefixedExpression(line, opts) {
+  const indent = indentOf(line);
+  const body = line.trim();
+  const prefixed = splitLeadingExpressionPrefix(body);
+  if (!prefixed || !prefixed.expression) return null;
+
+  const prefixText = prefixed.prefix;
+  const rhs = prefixed.expression;
+
+  if (isChain(rhs)) {
+    const parts = splitChain(rhs);
+    const lines = [indent + prefixText + ' ('];
+    const base = indent.length + opts.outerIndent;
+    const first = formatExpression(parts[0], base, opts, {}, 0).split('\n');
+    lines.push(...first.map((x, i) => i === 0 ? sp(base) + x.trimStart() : x));
+    const methodIndent = base + firstMemberDotOffset(parts[0]);
+    for (const p of parts.slice(1)) {
+      const rendered = formatCall(p, methodIndent, opts, { inChainMethod: true }, 0).split('\n');
+      lines.push(sp(methodIndent) + rendered[0].trimStart());
+      lines.push(...rendered.slice(1));
+    }
+    lines.push(sp(Math.max(indent.length + prefixText.length + 1, base - 3)) + ')');
+    return trimRight(lines.join('\n'));
+  }
+
+  const coll = outerCollection(rhs);
+  if (coll && !simpleInlineCollection(rhs)) {
+    const collectionColumn = indent.length + prefixText.length + 1;
+    const rendered = formatCollection(rhs, collectionColumn, opts, { forceCollectionExpand: true }, 0).split('\n');
+    rendered[0] = indent + prefixText + ' ' + rendered[0];
+    return trimRight(rendered.join('\n'));
+  }
+
+  const call = findCall(rhs);
+  const args = call ? topLevelCommaParts(call.content).map(x => x.trim()).filter(Boolean) : [];
+  if (call && shouldExpandCall(call.head, args, call.content, opts, false)) {
+    const rhsColumn = indent.length + prefixText.length + 1;
+    const rendered = formatCall(rhs, rhsColumn, opts, {}, 0).split('\n');
+    rendered[0] = indent + prefixText + ' ' + rendered[0];
+    return trimRight(rendered.join('\n'));
+  }
+
+  return null;
 }
 
 function formatAssignment(line, opts) {
@@ -715,6 +802,8 @@ function formatStatement(lines, opts) {
     if (!line.trim()) return '';
     const assignment = formatAssignment(line, opts);
     if (assignment) return assignment;
+    const prefixed = formatPrefixedExpression(line, opts);
+    if (prefixed) return prefixed;
     const standalone = formatStandaloneExpression(line, opts);
     if (standalone) return standalone;
     return trimRight(line);
@@ -738,6 +827,8 @@ function formatStatement(lines, opts) {
     }
     const a = formatAssignment(candidate, opts);
     if (a) return a;
+    const p = formatPrefixedExpression(candidate, opts);
+    if (p) return p;
     const e = formatStandaloneExpression(candidate, opts);
     if (e) return e;
   }
@@ -756,11 +847,60 @@ function formatStatement(lines, opts) {
     const a = formatAssignment(line, opts);
     if (a) result.push(a);
     else {
+      const p = formatPrefixedExpression(line, opts);
+      if (p) {
+        result.push(p);
+        continue;
+      }
       const e = formatStandaloneExpression(line, opts);
       result.push(e || trimRight(line));
     }
   }
   return result.join('\n');
+}
+
+function notebookSourceToText(source) {
+  if (typeof source === 'string') return source;
+  if (Array.isArray(source)) return source.join('');
+  return null;
+}
+
+function textToNotebookSource(text, preferArray) {
+  if (!preferArray) return text;
+  return text.match(/[^\n]*\n|[^\n]+/g) || [''];
+}
+
+function formatNotebookContent(text, options = {}) {
+  let notebook;
+  try {
+    notebook = JSON.parse(text);
+  } catch {
+    return text;
+  }
+
+  if (!notebook || !Array.isArray(notebook.cells)) return text;
+  const opts = { ...DEFAULTS, ...options };
+  let changed = false;
+
+  const formatted = {
+    ...notebook,
+    cells: notebook.cells.map(cell => {
+      if (!cell || cell.cell_type !== 'code') return cell;
+      const originalSource = notebookSourceToText(cell.source);
+      if (originalSource == null) return cell;
+
+      const nextSource = formatSelection(originalSource, opts);
+      if (nextSource === originalSource) return cell;
+
+      changed = true;
+      return {
+        ...cell,
+        source: textToNotebookSource(nextSource, Array.isArray(cell.source))
+      };
+    })
+  };
+
+  return changed ? JSON.stringify(formatted, null, 2) + '\n' : text;
 }
 
 function formatAlreadyWrappedSelection(text, opts) {
@@ -801,6 +941,7 @@ function formatSelection(text, options = {}) {
 }
 
 module.exports = {
+  formatNotebookContent,
   formatSelection,
   splitChain,
   topLevelCommaParts,

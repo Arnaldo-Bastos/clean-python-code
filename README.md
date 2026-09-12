@@ -26,6 +26,7 @@ The shortcut is intentionally registered as `ctrl+i` on **Windows, Linux, and ma
 - Python control-flow structures such as `for`, `if`, `elif`, `else`, `try`, `except`, `finally`, `with`, `match`, functions and classes, while preserving Python's structural indentation.
 - Multiple statements, blank lines and comments.
 - Python cells inside `.ipynb` notebooks opened in VS Code/Jupyter.
+- Raw `.ipynb` notebook JSON when opened as text in VS Code.
 
 ## Reference style
 
@@ -91,6 +92,7 @@ All options are available under **Settings → Clean Python Code**:
 
 - `.py`
 - Python cells in `.ipynb` notebooks supported by VS Code/Jupyter
+- Raw `.ipynb` notebook JSON content when the notebook file is opened as text
 
 ## Design principles
 
@@ -103,7 +105,7 @@ The formatter is designed to be idempotent: applying **Ctrl + I** repeatedly sho
 For local testing:
 
 ```bash
-code --install-extension clean-python-code-0.3.0.vsix
+code --install-extension clean-python-code-0.3.11.vsix
 ```
 
 Or use **Extensions → Views and More Actions (`...`) → Install from VSIX...**.

@@ -2,7 +2,7 @@
   "name": "clean-python-code",
   "displayName": "Clean Python Code",
   "description": "Personalized Python and PySpark formatting with hierarchical indentation, vertical chains, and aligned nested expressions.",
-  "version": "0.3.10",
+  "version": "0.3.11",
   "publisher": "cleanpythoncode",
   "license": "MIT",
   "icon": "icon.png",
@@ -26,7 +26,9 @@
     "vscode": ">=1.90.0"
   },
   "activationEvents": [
-    "onLanguage:python"
+    "onLanguage:python",
+    "onLanguage:json",
+    "onLanguage:jsonc"
   ],
   "main": "./extension.js",
   "galleryBanner": {

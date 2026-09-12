@@ -1,5 +1,5 @@
 const vscode = require('vscode');
-const { formatSelection } = require('./formatter');
+const { formatNotebookContent, formatSelection } = require('./formatter');
 
 function activate(context) {
   const command = vscode.commands.registerCommand('cleanPythonCode.formatSelection', async () => {
@@ -15,8 +15,11 @@ function activate(context) {
     }
 
     const document = editor.document;
-    if (document.languageId !== 'python') {
-      vscode.window.showWarningMessage('Clean Python Code currently formats Python selections, including Python cells in .ipynb notebooks.');
+    const isPython = document.languageId === 'python';
+    const isNotebookJson = document.fileName.endsWith('.ipynb') && ['json', 'jsonc'].includes(document.languageId);
+
+    if (!isPython && !isNotebookJson) {
+      vscode.window.showWarningMessage('Clean Python Code currently formats Python selections and raw .ipynb notebook JSON content.');
       return;
     }
 
@@ -31,7 +34,9 @@ function activate(context) {
     };
 
     const original = document.getText(selection);
-    const formatted = formatSelection(original, options);
+    const formatted = isNotebookJson
+      ? formatNotebookContent(original, options)
+      : formatSelection(original, options);
     if (formatted === original) {
       return;
     }
