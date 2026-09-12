@@ -28,7 +28,8 @@
   "activationEvents": [
     "onLanguage:python",
     "onLanguage:json",
-    "onLanguage:jsonc"
+    "onLanguage:jsonc",
+    "onLanguage:jsonl"
   ],
   "main": "./extension.js",
   "galleryBanner": {

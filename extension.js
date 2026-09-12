@@ -17,7 +17,7 @@ function activate(context) {
     const document = editor.document;
     const isPython = document.languageId === 'python';
     const normalizedFileName = document.fileName.toLowerCase();
-    const isNotebookJson = normalizedFileName.endsWith('.ipynb') && ['json', 'jsonc'].includes(document.languageId);
+    const isNotebookJson = normalizedFileName.endsWith('.ipynb');
 
     if (!isPython && !isNotebookJson) {
       vscode.window.showWarningMessage('Clean Python Code currently formats Python selections and raw .ipynb notebook JSON content.');
