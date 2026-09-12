@@ -369,7 +369,7 @@ function formatBoolean(value, indent, opts, ctx = {}) {
 
   const lines = [renderedOperands[0]];
   for (let j = 0; j < operators.length; j++) {
-    lines.push(sp(indent) + operators[j] + ' ' + renderedOperands[j + 1]);
+    lines.push((ctx.inCallArgument ? '' : sp(indent)) + operators[j] + ' ' + renderedOperands[j + 1]);
   }
   return lines.join('\n').trim();
 }
@@ -519,6 +519,7 @@ function formatCall(callSource, baseIndent, opts, ctx = {}, depth = 0) {
 
   args.forEach((arg, idx) => {
     const nested = outerCollection(arg.trim());
+    const multilineBoolean = hasTopLevelBoolean(normalizeKeywordEquals(arg));
 
     // For nested collections, the examples use a smaller offset for list/dict
     // arguments and a wider offset for nested parenthesized expressions.
@@ -542,6 +543,10 @@ function formatCall(callSource, baseIndent, opts, ctx = {}, depth = 0) {
     let first = sub[0];
     if (idx > 0 && opts.leadingComma) first = ',' + first;
     lines.push(sp(renderedBase) + first);
+    if (multilineBoolean && sub.length > 1) {
+      for (const extra of sub.slice(1)) lines.push(sp(renderedBase) + extra.trim());
+      return;
+    }
     for (const extra of sub.slice(1)) lines.push(extra);
   });
 
