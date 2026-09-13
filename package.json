@@ -1,0 +1,130 @@
+{
+  "name": "clean-python-code",
+  "displayName": "Clean Python Code",
+  "description": "Personalized Python and PySpark formatting with hierarchical indentation, vertically aligned nested delimiters, vertical chains, and aligned nested expressions.",
+  "version": "0.6.1",
+  "publisher": "cleanpythoncode",
+  "license": "MIT",
+  "icon": "icon.png",
+  "pricing": "Free",
+  "categories": [
+    "Formatters",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "python",
+    "pyspark",
+    "formatter",
+    "code formatting",
+    "indentation",
+    "jupyter",
+    "notebook",
+    "data analytics",
+    "data engineering"
+  ],
+  "engines": {
+    "vscode": ">=1.90.0"
+  },
+  "activationEvents": [
+    "onLanguage:python"
+  ],
+  "main": "./extension.js",
+  "galleryBanner": {
+    "color": "#1e293b",
+    "theme": "dark"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "cleanPythonCode.formatSelection",
+        "title": "Clean Python Code: Format Selection",
+        "category": "Clean Python Code"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "cleanPythonCode.formatSelection",
+        "key": "ctrl+i",
+        "when": "editorTextFocus && editorHasSelection && !editorReadonly && editorLangId == python"
+      }
+    ],
+    "configuration": {
+      "title": "Clean Python Code",
+      "properties": {
+        "cleanPythonCode.outerIndent": {
+          "type": "integer",
+          "default": 2,
+          "minimum": 0,
+          "description": "Spaces after the actual opening column of an outer expression group."
+        },
+        "cleanPythonCode.chainIndent": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "description": "Additional spaces relative to the first method dot; zero aligns all dots."
+        },
+        "cleanPythonCode.argumentIndent": {
+          "type": "integer",
+          "default": 2,
+          "minimum": 1,
+          "description": "Spaces after the actual opening column of a call or collection delimiter."
+        },
+        "cleanPythonCode.maxInlineLength": {
+          "type": "integer",
+          "default": 88,
+          "minimum": 40,
+          "description": "Soft expression length threshold. Short calls stay compact; existing multiline argument lists are retained. Long indivisible literals may exceed this value."
+        },
+        "cleanPythonCode.leadingComma": {
+          "type": "boolean",
+          "default": false,
+          "description": "Use leading commas in expanded calls and collections. Disabled by default; delimiters containing comments always use trailing commas to preserve comment placement."
+        },
+        "cleanPythonCode.expandBooleanOperators": {
+          "type": "boolean",
+          "default": true,
+          "description": "Expose boolean conditions with matched parentheses and operator-led lines. Independent of arithmeticLayout."
+        },
+        "cleanPythonCode.pythonPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "description": "Path to a Python 3.9+ executable (no command-line arguments). Empty: use the selected Microsoft Python environment, then Python on PATH. Use a Python version that supports your source syntax."
+        },
+        "cleanPythonCode.arithmeticLayout": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "compact",
+            "expanded"
+          ],
+          "default": "auto",
+          "enumDescriptions": [
+            "Keep short equations inline; split long equations at the main operator level.",
+            "Do not force arithmetic operator line breaks. Calls, comments and collections retain their layout rules.",
+            "Expand compound arithmetic recursively, as in version 0.6.0."
+          ],
+          "description": "Arithmetic layout policy, independent of boolean predicate formatting. Auto uses maxInlineLength as a soft expression-width threshold."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "node --test test/formatter.test.js",
+    "test:python": "python -m unittest discover -s test -p \"test_*.py\"",
+    "package": "python package_vsix.py"
+  },
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Starts a local Python interpreter to parse and format selected code."
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "Requires a Python interpreter on the extension host."
+    }
+  }
+}
