@@ -7,7 +7,7 @@ import sys
 import tokenize
 from bisect import bisect_left
 
-DEFAULTS = dict(outerIndent=4, chainIndent=0, argumentIndent=2,
+DEFAULTS = dict(outerIndent=4, chainIndent=0, argumentIndent=4,
                 maxInlineLength=88, leadingComma=False, expandBooleanOperators=True, arithmeticLayout='auto')
 INLINE_SUFFIXES = {'alias', 'cast', 'otherwise', 'over', 'asc', 'desc',
                    'isNull', 'isNotNull', 'isin', 'contains', 'startswith', 'endswith',
@@ -211,6 +211,14 @@ class Layout:
     def is_outer_group(self, opening):
         return (self.depth[opening] == 0 and self.ts[opening].string == '('
                 and opening not in self.call_openings)
+
+    def outer_group_ancestor(self, token_index):
+        current = token_index
+        while current is not None:
+            if current in self.pairs and self.is_outer_group(current):
+                return current
+            current = self.enclosing(current)
+        return None
 
     def plan(self, root):
         self.call_openings = {self.pairs[self.end(node)] for node in walk(root)
@@ -457,67 +465,60 @@ class Layout:
                                       if self.ts[j].string == ':'), None)
                         if colon is not None:
                             dict_colons.add(colon)
-        result, rendered_positions = '', {}
+        result, rendered_positions, rendered_line_indents = '', {}, {}
         current_col = self.indent
+        current_line_indent = self.indent
 
         def set_line_start(target):
-            nonlocal current_col
+            nonlocal current_col, current_line_indent
             current_col = target
+            current_line_indent = target
 
         for i, t in enumerate(self.ts):
             gap = self.source[self.ends[i - 1]:self.starts[i]] if i else ''
             if i in dict_colons and '\n' not in gap:
-                gap = ' '
+                gap = ''
             if i in self.breaks:
                 kind, anchor = self.breaks[i]
                 base = rendered_positions.get(anchor, self.indent)
+                anchor_line = rendered_line_indents.get(anchor, self.indent)
                 outer_anchor = anchor is not None and self.is_outer_group(anchor)
+                structural = anchor is not None and self.outer_group_ancestor(anchor) is not None
                 if kind == 'close':
-                    # A top-level expression wrapper is a structural block, not
-                    # a visual column ruler. Its closer returns to the statement
-                    # indentation instead of tracking a long assignment target.
-                    target = self.indent if outer_anchor else base
+                    if outer_anchor:
+                        target = self.indent
+                    elif structural:
+                        target = anchor_line
+                    else:
+                        target = base
                 elif kind == 'aligned_chain':
-                    target = base + self.opts['chainIndent']
+                    target = anchor_line + self.opts['chainIndent'] if structural else base + self.opts['chainIndent']
                 elif kind == 'outer':
                     target = self.indent + self.opts['outerIndent']
                 else:
-                    # Contents of the outer assignment/return grouping are
-                    # indented from the statement itself. Nested delimiters keep
-                    # their exact rendered-column hierarchy.
                     if anchor is None:
                         target = self.indent
                     elif outer_anchor:
                         target = self.indent + self.opts['outerIndent']
+                    elif structural:
+                        target = anchor_line + self.opts['argumentIndent']
                     else:
                         target = base + self.opts['argumentIndent']
-
-                # A structural break owns the entire leading whitespace of the
-                # new line. Do not inherit indentation from the canonical source
-                # token position; doing so is what previously produced huge,
-                # apparently random gaps before nested [], {}, and ().
                 gap = ('' if i == 0 else '\n') + ' ' * target
                 set_line_start(target)
-                rendered_positions[i] = current_col
             elif '\n' in gap:
-                # Comments can preserve a physical line break. Normalize the
-                # indentation from the source line, but never combine it with a
-                # stale absolute token column.
                 tail = gap.rsplit('\n', 1)[-1]
                 target = len(tail.expandtabs(8))
                 gap = '\n' + tail
                 set_line_start(target)
-                rendered_positions[i] = current_col
             else:
-                # `flat` is canonicalized before rendering, so non-breaking
-                # gaps are ordinary intra-line separators. Their width, rather
-                # than the original token's absolute column, is what must be
-                # preserved.
                 current_col += len(gap)
-                rendered_positions[i] = current_col
+            rendered_positions[i] = current_col
+            rendered_line_indents[i] = current_line_indent
             result += gap + t.string
             if '\n' in t.string:
                 current_col = len(t.string.rsplit('\n', 1)[-1])
+                current_line_indent = 0
             else:
                 current_col += len(t.string)
         return result
