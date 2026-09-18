@@ -1,14 +1,16 @@
-# Clean Python Code 0.6.1
+# Clean Python Code 0.6.9
 
 Formatação personalizada de Python e PySpark, orientada pela AST e pelos tokens originais. Formata arquivos `.py` e documentos Python das células de notebooks `.ipynb`.
+
+- Safely normalizes problematic Unicode whitespace copied into Python code (for example U+00A0), while preserving such characters inside strings and comments.
 
 ## Uso
 
 Instale o VSIX pelo comando **Extensions: Install from VSIX...** e recarregue o VS Code, se solicitado. É necessário um interpretador Python 3.9 ou superior, compatível com a sintaxe do arquivo; f-strings PEP 701 exigem Python 3.12 ou superior.
 
-- Selecione instruções completas e pressione **Ctrl+I**, ou execute **Clean Python Code: Format Selection**.
+- Selecione instruções completas e pressione **Ctrl + Alt + S**, ou execute **Clean Python Code: Format Selection**.
 - Para o documento inteiro, use **Format Document With... → Clean Python Code**.
-- Em notebooks, use a formatação da célula Python ou selecione o código da célula e pressione **Ctrl+I**. O provedor também pode ser usado pelo comando de formatação de notebook do VS Code.
+- Em notebooks, use a formatação da célula Python ou selecione o código da célula e pressione **Ctrl + Alt + S**. O provedor também pode ser usado pelo comando de formatação de notebook do VS Code.
 - Se necessário, configure `cleanPythonCode.pythonPath` com o caminho do executável. Sem configuração explícita, a extensão consulta o ambiente da extensão Microsoft Python e depois o PATH.
 
 ## Regras de layout
@@ -51,3 +53,30 @@ O código é analisado, nunca importado nem executado. Cada edição exige igual
 Cabeçalhos `def`, `for`, `if`, `else`, imports, suites de uma linha e instruções separadas por ponto e vírgula são preservados; as instruções completas dentro dos blocos podem ser formatadas. Seleções incompletas, células com comandos mágicos de IPython, sintaxe inválida ou não suportada pelo interpretador são recusadas, mantendo o original. Não há necessidade de instalar PySpark para formatar.
 
 O VSIX contém apenas os arquivos de execução e documentação. O ZIP de fontes separado inclui os testes, o notebook de referência e o script de empacotamento. Execute `python -m unittest discover -s test -p "test_*.py"`, `node --test test/formatter.test.js` e `python test/stdlib_corpus.py`. Os testes históricos foram mantidos em `test/legacy` como corpus; suas antigas expectativas literais de indentação foram substituídas por contratos de layout desta versão.
+
+
+### Notebook shortcut behavior
+
+`Ctrl + Alt + S` formats the current Python selection. If there is no text selection, it formats the active Python notebook cell (or active Python document). The Output panel `Clean Python Code` records targeting and formatting diagnostics.
+
+
+## Reviewed fluent-chain layout
+
+The first fluent segment stays on the base-expression line; later segments break and align with that first dot:
+
+```python
+spark = (
+          DatabricksSession.builder
+                            .getOrCreate()
+        )
+
+df_ai_requests = (
+                   spark.read
+                        .csv(
+                              path,
+                              header = True,
+                            )
+                 )
+```
+
+In Python notebooks, the command also falls back to notebook kernel/language metadata. If VS Code persisted a Python code cell as another language (for example `javascript`), the cell can still be formatted when the notebook itself is Python. After successful Python parsing/validation, the extension attempts to switch that cell back to the `python` language mode.

@@ -1,3 +1,76 @@
+# 0.6.10 — Simpler default shortcut
+
+- Changes the default **Clean Python Code: Format Selection** shortcut from `Ctrl + Alt + Shift + F` to `Ctrl + Alt + S`.
+- Keeps the formatter engine, Python-notebook language fallback, Unicode-whitespace sanitization and all 0.6.9 layout behavior unchanged.
+- The command id remains `cleanPythonCode.formatSelection`, so custom user keybindings remain compatible.
+
+# 0.6.9 — Reviewed screenshot layout + Python-notebook language fallback
+
+- Matches the three reviewed reference screenshots: the first fluent segment stays inline (`spark.read`, `DatabricksSession.builder`, `df_ai_requests.drop(...)`) and later segments align to the first dot.
+- Restores rendered-delimiter-relative defaults: `outerIndent=2`, `argumentIndent=2`, `chainIndent=0`.
+- Matching multiline closers remain aligned to their rendered opening delimiter.
+- Keeps dictionary normalization: one mapping per line, trailing commas, and standard `key: value` spacing.
+- Accepts notebook code cells when notebook kernel/language metadata says Python even if VS Code persisted the individual cell as another `languageId` such as `javascript`.
+- After successful Python parsing/formatting, attempts to switch a misclassified notebook code cell back to the VS Code `python` language mode.
+- Keeps safe Unicode-whitespace sanitization and the `Ctrl + Alt + Shift + F` shortcut.
+- Adds exact regressions for the three reviewed notebook cells.
+
+# 0.6.8 — Reliable notebook targeting and conflict-free shortcut
+
+- Changes the default shortcut to `Ctrl + Alt + Shift + F`, avoiding the VS Code/Copilot chat shortcuts `Ctrl + I` and `Ctrl + Alt + I`.
+- The shortcut is no longer gated by `editorHasSelection`, `editorLangId`, or editor-focus context keys; the command resolves the active Python target itself.
+- If text is selected, the selection is formatted. If no text is selected, the active Python document or notebook cell is formatted in full.
+- When a notebook has focus but no active text editor, the active Python cell is resolved directly and edited through a `WorkspaceEdit`.
+- Adds a `Clean Python Code` output channel and an `Open Log` action for targeting or formatter failures.
+- Keeps the 0.6.7 formatter engine unchanged, including safe Unicode-whitespace sanitization.
+
+# 0.6.7 — Safe Unicode whitespace sanitization
+
+- Normalizes non-ASCII Unicode whitespace such as U+00A0 NO-BREAK SPACE when it appears in Python code.
+- Sanitization runs before AST parsing, allowing code copied from browsers, chat clients and rich-text sources to be formatted instead of rejected as an invalid non-printable character.
+- String literals and comments are protected and keep their original Unicode whitespace unchanged.
+- Document-level safety validation uses the same sanitizer, so notebook selections containing problematic whitespace can still be validated after formatting.
+- Adds regression tests for U+00A0, U+2003, U+2007 and U+202F plus idempotence and literal/comment preservation.
+
+# 0.6.6 — Shortcut conflict fix
+
+- Changes the default **Clean Python Code: Format Selection** shortcut from `Ctrl + I` to `Ctrl + Alt + I`.
+- Avoids the default VS Code / Copilot Inline Chat conflict while keeping the formatter command identifier unchanged.
+- Existing users can still assign any custom shortcut through VS Code Keyboard Shortcuts.
+
+# 0.6.5 — Definitive chain and delimiter alignment
+
+- Outer assignment groups keep a short structural content indent, independent of assignment-name length.
+- Fluent pipelines split the base expression from every visible chain segment; attribute-only segments such as `.read` and `.builder` participate in the same dot axis.
+- All visible `.` tokens in a fluent chain share one vertical column.
+- Every multiline `()`, `[]`, and `{}` pair closes at the exact rendered column of its own opener.
+- Nested contents use `argumentIndent` relative to the actual rendered opener column, while only outer-group contents use structural indentation.
+- Dictionary entries remain one-per-line with trailing commas and standard `key: value` spacing.
+- Adds invariant tests for AST/token preservation, idempotence, chain-dot alignment, and delimiter-column alignment.
+
+# 0.6.4 — Structural pipelines and normalized mappings
+
+- Multiline calls and collections inside outer pipelines now use structural indentation instead of the exact horizontal column of their opening delimiter.
+- Call arguments and collection contents default to four spaces beyond their structural line; matching closers return to the call/collection indentation.
+- Fluent methods are forced vertical even when the input writes them on the same physical line.
+- Multiline dictionaries use one key/value mapping per line, with trailing commas and standard `key: value` spacing.
+- Adds a regression case based on the full `df_ai_requests` / `withColumnsRenamed` example.
+
+# 0.6.3 — Structural outer-group indentation
+
+- Top-level assignment/return grouping parentheses now behave as structural blocks: their contents are indented from the statement indentation instead of the rendered column of a long opening parenthesis.
+- The closing parenthesis of an outer expression group returns to the statement indentation, preventing long variable names from shifting entire PySpark pipelines to the right.
+- Nested call/collection delimiters keep their rendered-column hierarchy, so internal alignment rules remain unchanged.
+- `outerIndent` now defaults to 4 spaces and represents the indentation of content inside an outer expression group relative to the statement indentation.
+- Adds regression coverage for long assignment names and Spark reader chains.
+
+# 0.6.2 — Fluent chain alignment
+
+- Corrige o alinhamento de cadeias fluent API dentro de agrupamentos externos, incluindo `DatabricksSession.builder.getOrCreate()` e `spark.read.schema(...).option(...).csv(...)`.
+- Os métodos encadeados passam a usar como âncora o início renderizado da expressão-base, evitando que o primeiro ponto da cadeia caia na coluna zero.
+- Mantém equivalência AST, assinatura léxica e idempotência.
+- Adiciona testes de regressão específicos para DatabricksSession e Spark reader chains.
+
 # 0.6.1 ? Equa??es compactas e novo ?cone
 
 - Nova op??o `arithmeticLayout`, com padr?o `auto`: equa??es curtas ficam compactas e as longas recebem quebras no n?vel principal.

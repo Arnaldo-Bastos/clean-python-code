@@ -49,6 +49,52 @@ def tokens(source):
     return result
 
 
+def sanitize_unicode_whitespace(source):
+    """Normalize problematic Unicode whitespace in Python code only.
+
+    Non-ASCII whitespace copied from browsers, chat clients and rich text can
+    look identical to a regular space while making Python reject the source
+    (for example U+00A0 NO-BREAK SPACE). Replace those characters only when
+    they occur outside STRING and COMMENT tokens, preserving literal/comment
+    contents byte-for-byte.
+    """
+    if not any((ch.isspace() and ch not in ' \t\r\n\f\v') for ch in source):
+        return source
+
+    lines = source.splitlines(keepends=True)
+    offsets = [0]
+    for line in lines:
+        offsets.append(offsets[-1] + len(line))
+
+    protected = []
+    try:
+        raw = tokenize.generate_tokens(io.StringIO(source).readline)
+        for tok in raw:
+            if tok.type not in (tokenize.STRING, tokenize.COMMENT):
+                continue
+            start = offsets[tok.start[0] - 1] + tok.start[1]
+            end = offsets[tok.end[0] - 1] + tok.end[1]
+            protected.append((start, end))
+    except (tokenize.TokenError, IndentationError):
+        # The parser will report genuinely malformed source later. Spans that
+        # were tokenized successfully remain sufficient to protect completed
+        # strings/comments before that point.
+        pass
+
+    chars = list(source)
+    span_index = 0
+    for i, ch in enumerate(chars):
+        if not (ch.isspace() and ch not in ' \t\r\n\f\v'):
+            continue
+        while span_index < len(protected) and protected[span_index][1] <= i:
+            span_index += 1
+        inside_protected = (span_index < len(protected)
+                            and protected[span_index][0] <= i < protected[span_index][1])
+        if not inside_protected:
+            chars[i] = ' '
+    return ''.join(chars)
+
+
 def tree(source):
     # The synthetic suite accepts a complete, indented selection without
     # dedenting (which could change the contents of multiline strings).
@@ -144,6 +190,24 @@ class Layout:
                 target = comma if self.opts['leadingComma'] and not has_comments else comma + 1
                 self.breaks[target] = ('item', opening)
 
+    def expand_dict(self, node):
+        """Expand dictionary entries as key/value units, one entry per line."""
+        close = self.end(node)
+        opening = self.pairs.get(close)
+        if opening is None or opening >= close or opening != self.start(node) or not node.values:
+            return
+        self.breaks[opening + 1] = ('item', opening)
+        self.breaks[close] = ('close', opening)
+        has_comments = any(t.type == tokenize.COMMENT for t in self.ts[opening + 1:close])
+        entries = list(zip(node.keys, node.values))
+        for (_, left_value), (right_key, right_value) in zip(entries, entries[1:]):
+            right = right_key if right_key is not None else right_value
+            lo, hi = self.end(left_value) + 1, self.start(right)
+            comma = next((i for i in range(lo, hi) if self.ts[i].string == ','), None)
+            if comma is not None:
+                target = comma if self.opts['leadingComma'] and not has_comments else comma + 1
+                self.breaks[target] = ('item', opening)
+
     def chain_dot(self, node):
         if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
             return None
@@ -194,6 +258,14 @@ class Layout:
         return (self.depth[opening] == 0 and self.ts[opening].string == '('
                 and opening not in self.call_openings)
 
+    def outer_group_ancestor(self, token_index):
+        current = token_index
+        while current is not None:
+            if current in self.pairs and self.is_outer_group(current):
+                return current
+            current = self.enclosing(current)
+        return None
+
     def plan(self, root):
         self.call_openings = {self.pairs[self.end(node)] for node in walk(root)
                               if isinstance(node, ast.Call) and self.end(node) in self.pairs}
@@ -240,19 +312,6 @@ class Layout:
                     for arg in args:
                         if isinstance(arg, ast.Starred) and isinstance(arg.value, (ast.ListComp, ast.SetComp, ast.GeneratorExp)):
                             self.comprehension(arg.value, force=True)
-                dot = self.chain_dot(node)
-                if dot is not None:
-                    anchor = self.enclosing(dot)
-                    if anchor is not None:
-                        first = node
-                        while isinstance(first.func, ast.Attribute) and isinstance(first.func.value, ast.Call):
-                            first = first.func.value
-                        if isinstance(first.func, ast.Attribute):
-                            first_dot = next((i for i in range(self.end(first.func.value) + 1, self.end(first.func) + 1)
-                                              if self.ts[i].string == '.'), self.start(first))
-                        else:
-                            first_dot = self.start(first)
-                        self.breaks[dot] = ('aligned_chain', first_dot)
             elif isinstance(node, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
                 self.comprehension(node)
             elif isinstance(node, (ast.List, ast.Tuple, ast.Set)):
@@ -261,9 +320,7 @@ class Layout:
                         or any(self.start(node) < i < self.end(node) for i in self.breaks)):
                     self.expand(node, node.elts)
             elif isinstance(node, ast.Dict) and (len(node.values) > 1 or ast.dump(node) in self.expanded):
-                # Separator search starts at each previous value and ends at
-                # the next value, encompassing the next key but not its body.
-                self.expand(node, node.values)
+                self.expand_dict(node)
             elif self.opts['expandBooleanOperators'] and isinstance(node, (ast.BoolOp, ast.BinOp)):
                 if isinstance(node, ast.BoolOp):
                     operands = node.values
@@ -278,6 +335,34 @@ class Layout:
                               if self.ts[i].string == op), None)
                     if i is not None and self.enclosing(i) is not None:
                         self.breaks[i] = ('boolean', self.enclosing(i))
+
+    def plan_chain_alignment(self, root):
+        """Keep the first chain segment inline and align continuations to its dot.
+
+        The anchor is the first top-level dot in the fluent expression. Dots
+        nested inside call arguments are ignored.
+        """
+        planned = set()
+        for node in walk(root):
+            if not isinstance(node, ast.Call):
+                continue
+            dot = self.chain_dot(node)
+            if dot is None or dot in planned:
+                continue
+            enclosing = self.enclosing(dot)
+            if enclosing is None:
+                continue
+            start = self.start(node)
+            first_dot = next(
+                (i for i in range(start, dot)
+                 if self.ts[i].string == '.' and self.enclosing(i) == enclosing),
+                None
+            )
+            if first_dot is None:
+                continue
+            self.breaks[dot] = ('aligned_chain', first_dot)
+            planned.add(dot)
+
 
     def plan_arithmetic(self, root):
         for expression in arithmetic_roots(root):
@@ -443,17 +528,21 @@ class Layout:
                                       if self.ts[j].string == ':'), None)
                         if colon is not None:
                             dict_colons.add(colon)
-        result, rendered_positions = '', {}
+
+        result, rendered_positions, rendered_line_indents = '', {}, {}
         current_col = self.indent
+        current_line_indent = self.indent
 
         def set_line_start(target):
-            nonlocal current_col
+            nonlocal current_col, current_line_indent
             current_col = target
+            current_line_indent = target
 
         for i, t in enumerate(self.ts):
             gap = self.source[self.ends[i - 1]:self.starts[i]] if i else ''
             if i in dict_colons and '\n' not in gap:
-                gap = ' '
+                gap = ''
+
             if i in self.breaks:
                 kind, anchor = self.breaks[i]
                 base = rendered_positions.get(anchor, self.indent)
@@ -463,36 +552,30 @@ class Layout:
                     target = base + self.opts['chainIndent']
                 elif kind == 'outer':
                     target = base + self.opts['outerIndent']
+                elif anchor is None:
+                    target = self.indent
+                elif anchor is not None and self.is_outer_group(anchor):
+                    target = base + self.opts['outerIndent']
                 else:
-                    step = self.opts['outerIndent'] if anchor is not None and self.is_outer_group(anchor) else self.opts['argumentIndent']
-                    target = self.indent if anchor is None else base + step
+                    target = base + self.opts['argumentIndent']
 
-                # A structural break owns the entire leading whitespace of the
-                # new line. Do not inherit indentation from the canonical source
-                # token position; doing so is what previously produced huge,
-                # apparently random gaps before nested [], {}, and ().
                 gap = ('' if i == 0 else '\n') + ' ' * target
                 set_line_start(target)
-                rendered_positions[i] = current_col
             elif '\n' in gap:
-                # Comments can preserve a physical line break. Normalize the
-                # indentation from the source line, but never combine it with a
-                # stale absolute token column.
                 tail = gap.rsplit('\n', 1)[-1]
                 target = len(tail.expandtabs(8))
                 gap = '\n' + tail
                 set_line_start(target)
-                rendered_positions[i] = current_col
             else:
-                # `flat` is canonicalized before rendering, so non-breaking
-                # gaps are ordinary intra-line separators. Their width, rather
-                # than the original token's absolute column, is what must be
-                # preserved.
                 current_col += len(gap)
-                rendered_positions[i] = current_col
+
+            rendered_positions[i] = current_col
+            rendered_line_indents[i] = current_line_indent
             result += gap + t.string
+
             if '\n' in t.string:
                 current_col = len(t.string.rsplit('\n', 1)[-1])
+                current_line_indent = 0
             else:
                 current_col += len(t.string)
         return result
@@ -642,6 +725,7 @@ def format_statement(source, opts, indent):
     for _ in range(len(layout.ts) + 1):
         previous = dict(layout.breaks)
         layout.plan(root)
+        layout.plan_chain_alignment(root)
         layout.plan_arithmetic(root)
         layout.plan_comments()
         layout.plan_delimiter_alignment()
@@ -659,6 +743,7 @@ def format_statement(source, opts, indent):
 
 
 def format_source(source, options=None):
+    source = sanitize_unicode_whitespace(source)
     opts = dict(DEFAULTS)
     opts.update({k: v for k, v in (options or {}).items() if k in DEFAULTS})
     for key in ('outerIndent', 'chainIndent', 'argumentIndent', 'maxInlineLength'):
@@ -708,9 +793,11 @@ def format_source(source, options=None):
 
 def handle(request):
     if request.get('action') == 'validate':
-        if signature(request['before']) != signature(request['after']):
+        before = sanitize_unicode_whitespace(request['before'])
+        after = sanitize_unicode_whitespace(request['after'])
+        if signature(before) != signature(after):
             raise ValueError('Document AST changed; original code preserved.')
-        if lexical_signature(request['before']) != lexical_signature(request['after']):
+        if lexical_signature(before) != lexical_signature(after):
             raise ValueError('Document tokens changed; original code preserved.')
         return dict(ok=True)
     source = request['source']
