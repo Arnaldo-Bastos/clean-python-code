@@ -1,3 +1,13 @@
+# 0.6.5 — Definitive chain and delimiter alignment
+
+- Outer assignment groups keep a short structural content indent, independent of assignment-name length.
+- Fluent pipelines split the base expression from every visible chain segment; attribute-only segments such as `.read` and `.builder` participate in the same dot axis.
+- All visible `.` tokens in a fluent chain share one vertical column.
+- Every multiline `()`, `[]`, and `{}` pair closes at the exact rendered column of its own opener.
+- Nested contents use `argumentIndent` relative to the actual rendered opener column, while only outer-group contents use structural indentation.
+- Dictionary entries remain one-per-line with trailing commas and standard `key: value` spacing.
+- Adds invariant tests for AST/token preservation, idempotence, chain-dot alignment, and delimiter-column alignment.
+
 # 0.6.4 — Structural pipelines and normalized mappings
 
 - Multiline calls and collections inside outer pipelines now use structural indentation instead of the exact horizontal column of their opening delimiter.
