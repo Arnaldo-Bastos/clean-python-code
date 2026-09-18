@@ -1,9 +1,8 @@
 import unittest
-
 from formatter import format_source, signature, lexical_signature
 
 
-class V064PipelineAndDictRegressionTests(unittest.TestCase):
+class V064StructuralPipelineTests(unittest.TestCase):
     def check(self, source):
         result = format_source(source)
         self.assertEqual(signature(source), signature(result))
@@ -11,7 +10,7 @@ class V064PipelineAndDictRegressionTests(unittest.TestCase):
         self.assertEqual(result, format_source(result))
         return result
 
-    def test_user_ai_requests_example(self):
+    def test_ai_requests_pipeline_and_mapping(self):
         source = """data_path = "/Volumes/workspace/default/ai_cost_data"
 
 df_ai_requests = (
@@ -49,31 +48,14 @@ df_ai_requests.show(20, truncate = False)
 """
         result = self.check(source)
         lines = result.splitlines()
-
-        # Outer wrappers are structural: long assignment names do not create
-        # a huge left margin.
-        spark_line = next(line for line in lines if "spark.read" in line)
-        self.assertEqual(len(spark_line) - len(spark_line.lstrip()), 4)
-
-        # A chain written inline in the input is still expanded vertically.
-        drop_line = next(line for line in lines if "df_ai_requests.drop(" in line)
-        rename_line = next(line for line in lines if ".withColumnsRenamed(" in line)
-        self.assertEqual(len(drop_line) - len(drop_line.lstrip()), 4)
-        self.assertEqual(len(rename_line) - len(rename_line.lstrip()), 4)
-
-        # Every rename entry occupies its own physical line and commas stay
-        # trailing rather than beginning the next entry.
-        mapping_keys = [
-            "id_requisicao", "id_demanda", "data_hora_utc", "mes_ref",
-            "departamento", "caso_uso", "idioma", "complexidade",
-            "provedor_modelo", "modelo", "tokens_entrada", "tokens_saida",
-            "preco_entrada_usd_1m", "preco_saida_usd_1m",
-            "custo_entrada_usd", "custo_saida_usd", "custo_total_usd",
-        ]
-        entry_lines = [line for line in lines if any(f"'{key}'" in line for key in mapping_keys)]
-        self.assertEqual(len(entry_lines), len(mapping_keys))
-        self.assertTrue(all(not line.lstrip().startswith(",") for line in entry_lines))
-        self.assertTrue(all(sum(f"'{key}'" in line for key in mapping_keys) == 1 for line in entry_lines))
+        self.assertIn("    spark.read", lines)
+        self.assertIn("    .csv(", lines)
+        self.assertIn("    df_ai_requests.drop(", lines)
+        self.assertIn("    .withColumnsRenamed(", lines)
+        self.assertIn("            'id_requisicao': 'request_id',", lines)
+        self.assertIn("            'complexidade': 'complexity',", lines)
+        self.assertFalse(any(line.lstrip().startswith(",") for line in lines))
+        self.assertFalse(any("' : " in line for line in lines))
 
 
 if __name__ == "__main__":
