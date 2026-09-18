@@ -1,3 +1,10 @@
+# 0.6.2 — Fluent chain alignment
+
+- Corrige o alinhamento de cadeias fluent API dentro de agrupamentos externos, incluindo `DatabricksSession.builder.getOrCreate()` e `spark.read.schema(...).option(...).csv(...)`.
+- Os métodos encadeados passam a usar como âncora o início renderizado da expressão-base, evitando que o primeiro ponto da cadeia caia na coluna zero.
+- Mantém equivalência AST, assinatura léxica e idempotência.
+- Adiciona testes de regressão específicos para DatabricksSession e Spark reader chains.
+
 # 0.6.1 ? Equa??es compactas e novo ?cone
 
 - Nova op??o `arithmeticLayout`, com padr?o `auto`: equa??es curtas ficam compactas e as longas recebem quebras no n?vel principal.
