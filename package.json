@@ -65,9 +65,9 @@
         },
         "cleanPythonCode.argumentIndent": {
           "type": "integer",
-          "default": 2,
+          "default": 4,
           "minimum": 1,
-          "description": "Spaces after the actual opening column of a call or collection delimiter."
+          "description": "Spaces used to indent contents of a multiline call or collection relative to its structural line indentation."
         },
         "cleanPythonCode.maxInlineLength": {
           "type": "integer",
