@@ -1,8 +1,9 @@
-# 0.6.4 — Fluent-chain and dictionary normalization
+# 0.6.4 — Structural pipelines and normalized mappings
 
-- Fluent chains are forced vertical even when subsequent methods arrive on the same physical line in the input.
-- Multiline dictionaries are planned by key/value entries, guaranteeing one mapping per line.
-- Commas remain attached to the preceding dictionary entry when `leadingComma=false`, avoiding lines that begin with a comma.
+- Multiline calls and collections inside outer pipelines now use structural indentation instead of the exact horizontal column of their opening delimiter.
+- Call arguments and collection contents default to four spaces beyond their structural line; matching closers return to the call/collection indentation.
+- Fluent methods are forced vertical even when the input writes them on the same physical line.
+- Multiline dictionaries use one key/value mapping per line, with trailing commas and standard `key: value` spacing.
 - Adds a regression case based on the full `df_ai_requests` / `withColumnsRenamed` example.
 
 # 0.6.3 — Structural outer-group indentation
