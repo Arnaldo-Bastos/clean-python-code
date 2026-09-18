@@ -23,17 +23,63 @@ function fullDocumentRange(document) {
   return new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length));
 }
 
+function notebookCellForDocument(document) {
+  const uri = document.uri.toString();
+  for (const notebook of vscode.workspace.notebookDocuments) {
+    for (let index = 0; index < notebook.cellCount; index += 1) {
+      const cell = notebook.cellAt(index);
+      if (cell.document.uri.toString() === uri) return { notebook, cell, index };
+    }
+  }
+  return undefined;
+}
+
+function notebookIsPython(notebook) {
+  const metadata = notebook && notebook.metadata ? notebook.metadata : {};
+  const languageInfo = metadata.language_info || metadata.languageInfo || {};
+  const kernelspec = metadata.kernelspec || {};
+  const candidates = [languageInfo.name, kernelspec.language, kernelspec.name];
+  return candidates.some(value => typeof value === 'string' && value.toLowerCase().includes('python'));
+}
+
+function pythonTargetContext(document) {
+  const cellInfo = notebookCellForDocument(document);
+  if (document.languageId === 'python') {
+    return { allowed: true, via: 'document-language', cellInfo };
+  }
+  if (cellInfo
+      && cellInfo.cell.kind === vscode.NotebookCellKind.Code
+      && notebookIsPython(cellInfo.notebook)) {
+    return {
+      allowed: true,
+      via: 'python-notebook-fallback',
+      cellInfo,
+      originalLanguageId: document.languageId
+    };
+  }
+  return { allowed: false, via: 'not-python', cellInfo };
+}
+
 function activePythonTarget() {
   const editor = vscode.window.activeTextEditor;
-  if (editor && editor.document && editor.document.languageId === 'python') {
-    const document = editor.document;
-    let range = editor.selection.isEmpty
-      ? fullDocumentRange(document)
-      : new vscode.Range(editor.selection.start, editor.selection.end);
-    if (!editor.selection.isEmpty && !document.lineAt(range.start.line).text.slice(0, range.start.character).trim()) {
-      range = new vscode.Range(new vscode.Position(range.start.line, 0), range.end);
+  if (editor && editor.document) {
+    const context = pythonTargetContext(editor.document);
+    if (context.allowed) {
+      const document = editor.document;
+      let range = editor.selection.isEmpty
+        ? fullDocumentRange(document)
+        : new vscode.Range(editor.selection.start, editor.selection.end);
+      if (!editor.selection.isEmpty && !document.lineAt(range.start.line).text.slice(0, range.start.character).trim()) {
+        range = new vscode.Range(new vscode.Position(range.start.line, 0), range.end);
+      }
+      return {
+        document,
+        range,
+        editor,
+        context,
+        source: editor.selection.isEmpty ? 'active Python document/cell' : 'text selection'
+      };
     }
-    return { document, range, editor, source: editor.selection.isEmpty ? 'active Python document/cell' : 'text selection' };
   }
 
   const notebookEditor = vscode.window.activeNotebookEditor;
@@ -41,13 +87,17 @@ function activePythonTarget() {
     const selection = notebookEditor.selection;
     const index = Math.min(selection ? selection.start : 0, notebookEditor.notebook.cellCount - 1);
     const cell = notebookEditor.notebook.cellAt(index);
-    if (cell && cell.document && cell.document.languageId === 'python') {
-      return {
-        document: cell.document,
-        range: fullDocumentRange(cell.document),
-        editor: undefined,
-        source: `active notebook cell ${index + 1}`
-      };
+    if (cell && cell.kind === vscode.NotebookCellKind.Code && cell.document) {
+      const context = pythonTargetContext(cell.document);
+      if (context.allowed) {
+        return {
+          document: cell.document,
+          range: fullDocumentRange(cell.document),
+          editor: undefined,
+          context,
+          source: `active notebook cell ${index + 1}`
+        };
+      }
     }
   }
   return undefined;
@@ -66,9 +116,24 @@ function activate(context) {
     return { config, options };
   }
 
-  async function formatTarget(document, range, editor, token) {
+  async function normalizeNotebookCellLanguage(document, targetContext) {
+    if (!targetContext || targetContext.via !== 'python-notebook-fallback' || document.languageId === 'python') return;
+    try {
+      await vscode.languages.setTextDocumentLanguage(document, 'python');
+      output.appendLine(
+        `[language] Corrected notebook cell language ${targetContext.originalLanguageId || 'unknown'} -> python after successful Python validation.`
+      );
+    } catch (error) {
+      output.appendLine(`[language] Could not persist notebook cell language as python: ${error && error.message ? error.message : error}`);
+    }
+  }
+
+  async function formatTarget(document, range, editor, token, suppliedContext) {
     if (!vscode.workspace.isTrusted) throw new Error('A trusted workspace is required to start Python.');
-    if (document.languageId !== 'python') throw new Error(`Active language is ${document.languageId || 'unknown'}, not Python.`);
+    const targetContext = suppliedContext || pythonTargetContext(document);
+    if (!targetContext.allowed) {
+      throw new Error(`Active language is ${document.languageId || 'unknown'} and the cell is not part of a Python notebook.`);
+    }
 
     const { config, options } = optionsFor(document);
     const original = document.getText(range);
@@ -84,18 +149,19 @@ function activate(context) {
 
     if (token && token.isCancellationRequested) return false;
     if (document.isClosed || document.version !== version) throw new Error('Document changed during formatting. Please try again.');
-    if (formatted === original) return true;
-
-    if (editor && editor.document.uri.toString() === document.uri.toString()) {
-      const applied = await editor.edit(builder => builder.replace(range, formatted));
-      if (!applied) throw new Error('The editor rejected the formatting edit.');
-      return true;
+    if (formatted !== original) {
+      if (editor && editor.document.uri.toString() === document.uri.toString()) {
+        const applied = await editor.edit(builder => builder.replace(range, formatted));
+        if (!applied) throw new Error('The editor rejected the formatting edit.');
+      } else {
+        const edit = new vscode.WorkspaceEdit();
+        edit.replace(document.uri, range, formatted);
+        const applied = await vscode.workspace.applyEdit(edit);
+        if (!applied) throw new Error('VS Code rejected the notebook-cell formatting edit.');
+      }
     }
 
-    const edit = new vscode.WorkspaceEdit();
-    edit.replace(document.uri, range, formatted);
-    const applied = await vscode.workspace.applyEdit(edit);
-    if (!applied) throw new Error('VS Code rejected the notebook-cell formatting edit.');
+    await normalizeNotebookCellLanguage(document, targetContext);
     return true;
   }
 
@@ -152,13 +218,13 @@ function activate(context) {
       return;
     }
 
-    output.appendLine(`[command] Formatting ${target.source}; language=${target.document.languageId}; scheme=${target.document.uri.scheme}; chars=${target.document.getText(target.range).length}`);
+    output.appendLine(`[command] Formatting ${target.source}; language=${target.document.languageId}; pythonContext=${target.context.via}; scheme=${target.document.uri.scheme}; chars=${target.document.getText(target.range).length}`);
     try {
       await vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
         title: `Clean Python Code: formatting ${target.source}`,
         cancellable: true
-      }, (_progress, token) => formatTarget(target.document, target.range, target.editor, token));
+      }, (_progress, token) => formatTarget(target.document, target.range, target.editor, token, target.context));
       output.appendLine('[command] Formatting completed successfully.');
     } catch (error) {
       output.appendLine(`[command] ${error && error.stack ? error.stack : error}`);
