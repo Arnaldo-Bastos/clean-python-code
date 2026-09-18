@@ -7,7 +7,7 @@ import sys
 import tokenize
 from bisect import bisect_left
 
-DEFAULTS = dict(outerIndent=4, chainIndent=4, argumentIndent=4,
+DEFAULTS = dict(outerIndent=2, chainIndent=0, argumentIndent=2,
                 maxInlineLength=88, leadingComma=False, expandBooleanOperators=True, arithmeticLayout='auto')
 INLINE_SUFFIXES = {'alias', 'cast', 'otherwise', 'over', 'asc', 'desc',
                    'isNull', 'isNotNull', 'isin', 'contains', 'startswith', 'endswith',
@@ -337,48 +337,32 @@ class Layout:
                         self.breaks[i] = ('boolean', self.enclosing(i))
 
     def plan_chain_alignment(self, root):
-        """Align every visible dot in a fluent chain to one vertical axis.
+        """Keep the first chain segment inline and align continuations to its dot.
 
-        The AST represents `spark.read` as Attribute and `.csv(...)` as a
-        Call whose function is an Attribute. Planning only Calls misses
-        attribute-only segments and the first method of a longer chain.
+        The anchor is the first top-level dot in the fluent expression. Dots
+        nested inside call arguments are ignored.
         """
         planned = set()
         for node in walk(root):
-            if not isinstance(node, ast.Attribute):
+            if not isinstance(node, ast.Call):
                 continue
-
-            attrs = []
-            current = node
-            while isinstance(current, ast.Attribute):
-                attrs.append(current)
-                base = current.value
-                if isinstance(base, ast.Call) and isinstance(base.func, ast.Attribute):
-                    current = base.func
-                elif isinstance(base, ast.Attribute):
-                    current = base
-                else:
-                    current = base
-                    break
-
-            visible = [attr for attr in attrs if attr.attr not in INLINE_SUFFIXES]
-            if not visible:
+            dot = self.chain_dot(node)
+            if dot is None or dot in planned:
                 continue
-            fluent = (len(visible) >= 2
-                      or any(attr.attr in {'builder', 'read', 'write'} for attr in visible))
-            if not fluent:
+            enclosing = self.enclosing(dot)
+            if enclosing is None:
                 continue
+            start = self.start(node)
+            first_dot = next(
+                (i for i in range(start, dot)
+                 if self.ts[i].string == '.' and self.enclosing(i) == enclosing),
+                None
+            )
+            if first_dot is None:
+                continue
+            self.breaks[dot] = ('aligned_chain', first_dot)
+            planned.add(dot)
 
-            root_anchor = self.start(current)
-            for attr in visible:
-                lo = self.end(attr.value) + 1
-                hi = self.end(attr) + 1
-                dot = next((i for i in range(lo, min(hi, len(self.ts)))
-                            if self.ts[i].string == '.'), None)
-                if dot is None or dot in planned or self.enclosing(dot) is None:
-                    continue
-                self.breaks[dot] = ('aligned_chain', root_anchor)
-                planned.add(dot)
 
     def plan_arithmetic(self, root):
         for expression in arithmetic_roots(root):
@@ -562,31 +546,17 @@ class Layout:
             if i in self.breaks:
                 kind, anchor = self.breaks[i]
                 base = rendered_positions.get(anchor, self.indent)
-                anchor_line = rendered_line_indents.get(anchor, self.indent)
-                outer_anchor = anchor is not None and self.is_outer_group(anchor)
-
                 if kind == 'close':
-                    # Every matching closer is vertically aligned with the
-                    # exact rendered column of its own opener, including the
-                    # outer RHS grouping parenthesis.
                     target = base
                 elif kind == 'aligned_chain':
-                    # The base expression starts at the structural outer-group
-                    # indentation; all fluent dots share one axis to its right.
-                    target = anchor_line + self.opts['chainIndent']
+                    target = base + self.opts['chainIndent']
                 elif kind == 'outer':
-                    target = self.indent + self.opts['outerIndent']
+                    target = base + self.opts['outerIndent']
                 elif anchor is None:
                     target = self.indent
-                elif outer_anchor:
-                    # Special case: a long assignment target must not push the
-                    # entire pipeline to the opener column. Only the outer
-                    # contents use structural indentation; its closer still
-                    # aligns with the actual '(' via the close rule above.
-                    target = self.indent + self.opts['outerIndent']
+                elif anchor is not None and self.is_outer_group(anchor):
+                    target = base + self.opts['outerIndent']
                 else:
-                    # Inside the structural pipeline, nested delimiters keep
-                    # the exact rendered-column contract.
                     target = base + self.opts['argumentIndent']
 
                 gap = ('' if i == 0 else '\n') + ' ' * target
