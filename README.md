@@ -1,4 +1,4 @@
-# Clean Python Code 0.6.9
+# Clean Python Code 0.6.10
 
 Formatação personalizada de Python e PySpark, orientada pela AST e pelos tokens originais. Formata arquivos `.py` e documentos Python das células de notebooks `.ipynb`.
 
