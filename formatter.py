@@ -7,7 +7,7 @@ import sys
 import tokenize
 from bisect import bisect_left
 
-DEFAULTS = dict(outerIndent=2, chainIndent=0, argumentIndent=2,
+DEFAULTS = dict(outerIndent=4, chainIndent=0, argumentIndent=2,
                 maxInlineLength=88, leadingComma=False, expandBooleanOperators=True, arithmeticLayout='auto')
 INLINE_SUFFIXES = {'alias', 'cast', 'otherwise', 'over', 'asc', 'desc',
                    'isNull', 'isNotNull', 'isin', 'contains', 'startswith', 'endswith',
@@ -457,15 +457,26 @@ class Layout:
             if i in self.breaks:
                 kind, anchor = self.breaks[i]
                 base = rendered_positions.get(anchor, self.indent)
+                outer_anchor = anchor is not None and self.is_outer_group(anchor)
                 if kind == 'close':
-                    target = base
+                    # A top-level expression wrapper is a structural block, not
+                    # a visual column ruler. Its closer returns to the statement
+                    # indentation instead of tracking a long assignment target.
+                    target = self.indent if outer_anchor else base
                 elif kind == 'aligned_chain':
                     target = base + self.opts['chainIndent']
                 elif kind == 'outer':
-                    target = base + self.opts['outerIndent']
+                    target = self.indent + self.opts['outerIndent']
                 else:
-                    step = self.opts['outerIndent'] if anchor is not None and self.is_outer_group(anchor) else self.opts['argumentIndent']
-                    target = self.indent if anchor is None else base + step
+                    # Contents of the outer assignment/return grouping are
+                    # indented from the statement itself. Nested delimiters keep
+                    # their exact rendered-column hierarchy.
+                    if anchor is None:
+                        target = self.indent
+                    elif outer_anchor:
+                        target = self.indent + self.opts['outerIndent']
+                    else:
+                        target = base + self.opts['argumentIndent']
 
                 # A structural break owns the entire leading whitespace of the
                 # new line. Do not inherit indentation from the canonical source
