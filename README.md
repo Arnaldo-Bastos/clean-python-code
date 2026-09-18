@@ -53,3 +53,8 @@ O código é analisado, nunca importado nem executado. Cada edição exige igual
 Cabeçalhos `def`, `for`, `if`, `else`, imports, suites de uma linha e instruções separadas por ponto e vírgula são preservados; as instruções completas dentro dos blocos podem ser formatadas. Seleções incompletas, células com comandos mágicos de IPython, sintaxe inválida ou não suportada pelo interpretador são recusadas, mantendo o original. Não há necessidade de instalar PySpark para formatar.
 
 O VSIX contém apenas os arquivos de execução e documentação. O ZIP de fontes separado inclui os testes, o notebook de referência e o script de empacotamento. Execute `python -m unittest discover -s test -p "test_*.py"`, `node --test test/formatter.test.js` e `python test/stdlib_corpus.py`. Os testes históricos foram mantidos em `test/legacy` como corpus; suas antigas expectativas literais de indentação foram substituídas por contratos de layout desta versão.
+
+
+### Notebook shortcut behavior
+
+`Ctrl + Alt + Shift + F` formats the current Python selection. If there is no text selection, it formats the active Python notebook cell (or active Python document). The Output panel `Clean Python Code` records targeting and formatting diagnostics.
