@@ -2,7 +2,7 @@
   "name": "clean-python-code",
   "displayName": "Clean Python Code",
   "description": "Personalized Python and PySpark formatting with hierarchical indentation, vertically aligned nested delimiters, vertical chains, and aligned nested expressions.",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "publisher": "cleanpythoncode",
   "license": "MIT",
   "icon": "icon.png",
@@ -53,9 +53,9 @@
       "properties": {
         "cleanPythonCode.outerIndent": {
           "type": "integer",
-          "default": 2,
+          "default": 4,
           "minimum": 0,
-          "description": "Spaces after the actual opening column of an outer expression group."
+          "description": "Spaces used to indent content inside a top-level expression group relative to the statement indentation."
         },
         "cleanPythonCode.chainIndent": {
           "type": "integer",
