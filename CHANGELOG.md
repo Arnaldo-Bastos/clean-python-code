@@ -1,3 +1,14 @@
+# 0.6.9 — Reviewed screenshot layout + Python-notebook language fallback
+
+- Matches the three reviewed reference screenshots: the first fluent segment stays inline (`spark.read`, `DatabricksSession.builder`, `df_ai_requests.drop(...)`) and later segments align to the first dot.
+- Restores rendered-delimiter-relative defaults: `outerIndent=2`, `argumentIndent=2`, `chainIndent=0`.
+- Matching multiline closers remain aligned to their rendered opening delimiter.
+- Keeps dictionary normalization: one mapping per line, trailing commas, and standard `key: value` spacing.
+- Accepts notebook code cells when notebook kernel/language metadata says Python even if VS Code persisted the individual cell as another `languageId` such as `javascript`.
+- After successful Python parsing/formatting, attempts to switch a misclassified notebook code cell back to the VS Code `python` language mode.
+- Keeps safe Unicode-whitespace sanitization and the `Ctrl + Alt + Shift + F` shortcut.
+- Adds exact regressions for the three reviewed notebook cells.
+
 # 0.6.8 — Reliable notebook targeting and conflict-free shortcut
 
 - Changes the default shortcut to `Ctrl + Alt + Shift + F`, avoiding the VS Code/Copilot chat shortcuts `Ctrl + I` and `Ctrl + Alt + I`.
