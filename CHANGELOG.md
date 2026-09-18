@@ -1,3 +1,10 @@
+# 0.6.4 — Fluent-chain and dictionary normalization
+
+- Fluent chains are forced vertical even when subsequent methods arrive on the same physical line in the input.
+- Multiline dictionaries are planned by key/value entries, guaranteeing one mapping per line.
+- Commas remain attached to the preceding dictionary entry when `leadingComma=false`, avoiding lines that begin with a comma.
+- Adds a regression case based on the full `df_ai_requests` / `withColumnsRenamed` example.
+
 # 0.6.3 — Structural outer-group indentation
 
 - Top-level assignment/return grouping parentheses now behave as structural blocks: their contents are indented from the statement indentation instead of the rendered column of a long opening parenthesis.
