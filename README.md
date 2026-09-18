@@ -8,9 +8,9 @@ Formatação personalizada de Python e PySpark, orientada pela AST e pelos token
 
 Instale o VSIX pelo comando **Extensions: Install from VSIX...** e recarregue o VS Code, se solicitado. É necessário um interpretador Python 3.9 ou superior, compatível com a sintaxe do arquivo; f-strings PEP 701 exigem Python 3.12 ou superior.
 
-- Selecione instruções completas e pressione **Ctrl + Alt + Shift + F**, ou execute **Clean Python Code: Format Selection**.
+- Selecione instruções completas e pressione **Ctrl + Alt + S**, ou execute **Clean Python Code: Format Selection**.
 - Para o documento inteiro, use **Format Document With... → Clean Python Code**.
-- Em notebooks, use a formatação da célula Python ou selecione o código da célula e pressione **Ctrl + Alt + Shift + F**. O provedor também pode ser usado pelo comando de formatação de notebook do VS Code.
+- Em notebooks, use a formatação da célula Python ou selecione o código da célula e pressione **Ctrl + Alt + S**. O provedor também pode ser usado pelo comando de formatação de notebook do VS Code.
 - Se necessário, configure `cleanPythonCode.pythonPath` com o caminho do executável. Sem configuração explícita, a extensão consulta o ambiente da extensão Microsoft Python e depois o PATH.
 
 ## Regras de layout
@@ -57,7 +57,7 @@ O VSIX contém apenas os arquivos de execução e documentação. O ZIP de fonte
 
 ### Notebook shortcut behavior
 
-`Ctrl + Alt + Shift + F` formats the current Python selection. If there is no text selection, it formats the active Python notebook cell (or active Python document). The Output panel `Clean Python Code` records targeting and formatting diagnostics.
+`Ctrl + Alt + S` formats the current Python selection. If there is no text selection, it formats the active Python notebook cell (or active Python document). The Output panel `Clean Python Code` records targeting and formatting diagnostics.
 
 
 ## Reviewed fluent-chain layout
