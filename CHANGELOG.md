@@ -1,3 +1,12 @@
+# 0.6.8 — Reliable notebook targeting and conflict-free shortcut
+
+- Changes the default shortcut to `Ctrl + Alt + Shift + F`, avoiding the VS Code/Copilot chat shortcuts `Ctrl + I` and `Ctrl + Alt + I`.
+- The shortcut is no longer gated by `editorHasSelection`, `editorLangId`, or editor-focus context keys; the command resolves the active Python target itself.
+- If text is selected, the selection is formatted. If no text is selected, the active Python document or notebook cell is formatted in full.
+- When a notebook has focus but no active text editor, the active Python cell is resolved directly and edited through a `WorkspaceEdit`.
+- Adds a `Clean Python Code` output channel and an `Open Log` action for targeting or formatter failures.
+- Keeps the 0.6.7 formatter engine unchanged, including safe Unicode-whitespace sanitization.
+
 # 0.6.7 — Safe Unicode whitespace sanitization
 
 - Normalizes non-ASCII Unicode whitespace such as U+00A0 NO-BREAK SPACE when it appears in Python code.
