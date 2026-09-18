@@ -7,7 +7,7 @@ import sys
 import tokenize
 from bisect import bisect_left
 
-DEFAULTS = dict(outerIndent=4, chainIndent=0, argumentIndent=4,
+DEFAULTS = dict(outerIndent=4, chainIndent=4, argumentIndent=4,
                 maxInlineLength=88, leadingComma=False, expandBooleanOperators=True, arithmeticLayout='auto')
 INLINE_SUFFIXES = {'alias', 'cast', 'otherwise', 'over', 'asc', 'desc',
                    'isNull', 'isNotNull', 'isin', 'contains', 'startswith', 'endswith',
