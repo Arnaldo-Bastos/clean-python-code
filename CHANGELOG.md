@@ -1,3 +1,11 @@
+# 0.6.7 — Safe Unicode whitespace sanitization
+
+- Normalizes non-ASCII Unicode whitespace such as U+00A0 NO-BREAK SPACE when it appears in Python code.
+- Sanitization runs before AST parsing, allowing code copied from browsers, chat clients and rich-text sources to be formatted instead of rejected as an invalid non-printable character.
+- String literals and comments are protected and keep their original Unicode whitespace unchanged.
+- Document-level safety validation uses the same sanitizer, so notebook selections containing problematic whitespace can still be validated after formatting.
+- Adds regression tests for U+00A0, U+2003, U+2007 and U+202F plus idempotence and literal/comment preservation.
+
 # 0.6.6 — Shortcut conflict fix
 
 - Changes the default **Clean Python Code: Format Selection** shortcut from `Ctrl + I` to `Ctrl + Alt + I`.
