@@ -2,6 +2,8 @@
 
 Formatação personalizada de Python e PySpark, orientada pela AST e pelos tokens originais. Formata arquivos `.py` e documentos Python das células de notebooks `.ipynb`.
 
+- Safely normalizes problematic Unicode whitespace copied into Python code (for example U+00A0), while preserving such characters inside strings and comments.
+
 ## Uso
 
 Instale o VSIX pelo comando **Extensions: Install from VSIX...** e recarregue o VS Code, se solicitado. É necessário um interpretador Python 3.9 ou superior, compatível com a sintaxe do arquivo; f-strings PEP 701 exigem Python 3.12 ou superior.
