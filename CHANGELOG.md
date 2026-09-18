@@ -1,3 +1,9 @@
+# 0.6.6 — Shortcut conflict fix
+
+- Changes the default **Clean Python Code: Format Selection** shortcut from `Ctrl + I` to `Ctrl + Alt + I`.
+- Avoids the default VS Code / Copilot Inline Chat conflict while keeping the formatter command identifier unchanged.
+- Existing users can still assign any custom shortcut through VS Code Keyboard Shortcuts.
+
 # 0.6.5 — Definitive chain and delimiter alignment
 
 - Outer assignment groups keep a short structural content indent, independent of assignment-name length.
