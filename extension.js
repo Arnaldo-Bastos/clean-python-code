@@ -211,7 +211,7 @@ function activate(context) {
     if (!target) {
       output.appendLine('[command] No active Python text editor or Python notebook cell was found.');
       const action = await vscode.window.showWarningMessage(
-        'Clean Python Code: no active Python editor/cell found. Click inside a Python cell and try Ctrl+Alt+Shift+F again.',
+        'Clean Python Code: no active Python editor/cell found. Click inside a Python cell and try Ctrl+Alt+S again.',
         'Open Log'
       );
       if (action === 'Open Log') output.show(true);
