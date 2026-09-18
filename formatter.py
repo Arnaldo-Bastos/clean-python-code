@@ -49,6 +49,52 @@ def tokens(source):
     return result
 
 
+def sanitize_unicode_whitespace(source):
+    """Normalize problematic Unicode whitespace in Python code only.
+
+    Non-ASCII whitespace copied from browsers, chat clients and rich text can
+    look identical to a regular space while making Python reject the source
+    (for example U+00A0 NO-BREAK SPACE). Replace those characters only when
+    they occur outside STRING and COMMENT tokens, preserving literal/comment
+    contents byte-for-byte.
+    """
+    if not any((ch.isspace() and ch not in ' \t\r\n\f\v') for ch in source):
+        return source
+
+    lines = source.splitlines(keepends=True)
+    offsets = [0]
+    for line in lines:
+        offsets.append(offsets[-1] + len(line))
+
+    protected = []
+    try:
+        raw = tokenize.generate_tokens(io.StringIO(source).readline)
+        for tok in raw:
+            if tok.type not in (tokenize.STRING, tokenize.COMMENT):
+                continue
+            start = offsets[tok.start[0] - 1] + tok.start[1]
+            end = offsets[tok.end[0] - 1] + tok.end[1]
+            protected.append((start, end))
+    except (tokenize.TokenError, IndentationError):
+        # The parser will report genuinely malformed source later. Spans that
+        # were tokenized successfully remain sufficient to protect completed
+        # strings/comments before that point.
+        pass
+
+    chars = list(source)
+    span_index = 0
+    for i, ch in enumerate(chars):
+        if not (ch.isspace() and ch not in ' \t\r\n\f\v'):
+            continue
+        while span_index < len(protected) and protected[span_index][1] <= i:
+            span_index += 1
+        inside_protected = (span_index < len(protected)
+                            and protected[span_index][0] <= i < protected[span_index][1])
+        if not inside_protected:
+            chars[i] = ' '
+    return ''.join(chars)
+
+
 def tree(source):
     # The synthetic suite accepts a complete, indented selection without
     # dedenting (which could change the contents of multiline strings).
@@ -727,6 +773,7 @@ def format_statement(source, opts, indent):
 
 
 def format_source(source, options=None):
+    source = sanitize_unicode_whitespace(source)
     opts = dict(DEFAULTS)
     opts.update({k: v for k, v in (options or {}).items() if k in DEFAULTS})
     for key in ('outerIndent', 'chainIndent', 'argumentIndent', 'maxInlineLength'):
@@ -776,9 +823,11 @@ def format_source(source, options=None):
 
 def handle(request):
     if request.get('action') == 'validate':
-        if signature(request['before']) != signature(request['after']):
+        before = sanitize_unicode_whitespace(request['before'])
+        after = sanitize_unicode_whitespace(request['after'])
+        if signature(before) != signature(after):
             raise ValueError('Document AST changed; original code preserved.')
-        if lexical_signature(request['before']) != lexical_signature(request['after']):
+        if lexical_signature(before) != lexical_signature(after):
             raise ValueError('Document tokens changed; original code preserved.')
         return dict(ok=True)
     source = request['source']
