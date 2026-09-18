@@ -144,6 +144,24 @@ class Layout:
                 target = comma if self.opts['leadingComma'] and not has_comments else comma + 1
                 self.breaks[target] = ('item', opening)
 
+    def expand_dict(self, node):
+        """Expand dictionary entries as key/value units, one entry per line."""
+        close = self.end(node)
+        opening = self.pairs.get(close)
+        if opening is None or opening >= close or opening != self.start(node) or not node.values:
+            return
+        self.breaks[opening + 1] = ('item', opening)
+        self.breaks[close] = ('close', opening)
+        has_comments = any(t.type == tokenize.COMMENT for t in self.ts[opening + 1:close])
+        entries = list(zip(node.keys, node.values))
+        for (_, left_value), (right_key, right_value) in zip(entries, entries[1:]):
+            right = right_key if right_key is not None else right_value
+            lo, hi = self.end(left_value) + 1, self.start(right)
+            comma = next((i for i in range(lo, hi) if self.ts[i].string == ','), None)
+            if comma is not None:
+                target = comma if self.opts['leadingComma'] and not has_comments else comma + 1
+                self.breaks[target] = ('item', opening)
+
     def chain_dot(self, node):
         if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
             return None
@@ -241,18 +259,16 @@ class Layout:
                         if isinstance(arg, ast.Starred) and isinstance(arg.value, (ast.ListComp, ast.SetComp, ast.GeneratorExp)):
                             self.comprehension(arg.value, force=True)
                 dot = self.chain_dot(node)
-                if dot is not None:
-                    anchor = self.enclosing(dot)
-                    if anchor is not None:
-                        first = node
-                        while isinstance(first.func, ast.Attribute) and isinstance(first.func.value, ast.Call):
-                            first = first.func.value
-                        # Anchor every continuation dot to the rendered start
-                        # of the root expression, never to another dot. The old
-                        # self-referential first-dot anchor fell back to column
-                        # zero before that token had been rendered.
-                        first_anchor = self.start(first)
-                        self.breaks[dot] = ('aligned_chain', first_anchor)
+                if dot is not None and self.enclosing(dot) is not None:
+                    # Force every continuation method onto its own line even
+                    # when the original source wrote the whole fluent chain on
+                    # one physical line. The first call stays attached to its
+                    # base expression; subsequent dots align to that root.
+                    first = node
+                    while isinstance(first.func, ast.Attribute) and isinstance(first.func.value, ast.Call):
+                        first = first.func.value
+                    first_anchor = self.start(first)
+                    self.breaks[dot] = ('aligned_chain', first_anchor)
             elif isinstance(node, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
                 self.comprehension(node)
             elif isinstance(node, (ast.List, ast.Tuple, ast.Set)):
@@ -261,9 +277,7 @@ class Layout:
                         or any(self.start(node) < i < self.end(node) for i in self.breaks)):
                     self.expand(node, node.elts)
             elif isinstance(node, ast.Dict) and (len(node.values) > 1 or ast.dump(node) in self.expanded):
-                # Separator search starts at each previous value and ends at
-                # the next value, encompassing the next key but not its body.
-                self.expand(node, node.values)
+                self.expand_dict(node)
             elif self.opts['expandBooleanOperators'] and isinstance(node, (ast.BoolOp, ast.BinOp)):
                 if isinstance(node, ast.BoolOp):
                     operands = node.values
