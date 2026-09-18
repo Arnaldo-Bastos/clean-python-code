@@ -1,3 +1,11 @@
+# 0.6.3 — Structural outer-group indentation
+
+- Top-level assignment/return grouping parentheses now behave as structural blocks: their contents are indented from the statement indentation instead of the rendered column of a long opening parenthesis.
+- The closing parenthesis of an outer expression group returns to the statement indentation, preventing long variable names from shifting entire PySpark pipelines to the right.
+- Nested call/collection delimiters keep their rendered-column hierarchy, so internal alignment rules remain unchanged.
+- `outerIndent` now defaults to 4 spaces and represents the indentation of content inside an outer expression group relative to the statement indentation.
+- Adds regression coverage for long assignment names and Spark reader chains.
+
 # 0.6.2 — Fluent chain alignment
 
 - Corrige o alinhamento de cadeias fluent API dentro de agrupamentos externos, incluindo `DatabricksSession.builder.getOrCreate()` e `spark.read.schema(...).option(...).csv(...)`.
