@@ -266,17 +266,6 @@ class Layout:
                     for arg in args:
                         if isinstance(arg, ast.Starred) and isinstance(arg.value, (ast.ListComp, ast.SetComp, ast.GeneratorExp)):
                             self.comprehension(arg.value, force=True)
-                dot = self.chain_dot(node)
-                if dot is not None and self.enclosing(dot) is not None:
-                    # Force every continuation method onto its own line even
-                    # when the original source wrote the whole fluent chain on
-                    # one physical line. The first call stays attached to its
-                    # base expression; subsequent dots align to that root.
-                    first = node
-                    while isinstance(first.func, ast.Attribute) and isinstance(first.func.value, ast.Call):
-                        first = first.func.value
-                    first_anchor = self.start(first)
-                    self.breaks[dot] = ('aligned_chain', first_anchor)
             elif isinstance(node, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
                 self.comprehension(node)
             elif isinstance(node, (ast.List, ast.Tuple, ast.Set)):
@@ -300,6 +289,50 @@ class Layout:
                               if self.ts[i].string == op), None)
                     if i is not None and self.enclosing(i) is not None:
                         self.breaks[i] = ('boolean', self.enclosing(i))
+
+    def plan_chain_alignment(self, root):
+        """Align every visible dot in a fluent chain to one vertical axis.
+
+        The AST represents `spark.read` as Attribute and `.csv(...)` as a
+        Call whose function is an Attribute. Planning only Calls misses
+        attribute-only segments and the first method of a longer chain.
+        """
+        planned = set()
+        for node in walk(root):
+            if not isinstance(node, ast.Attribute):
+                continue
+
+            attrs = []
+            current = node
+            while isinstance(current, ast.Attribute):
+                attrs.append(current)
+                base = current.value
+                if isinstance(base, ast.Call) and isinstance(base.func, ast.Attribute):
+                    current = base.func
+                elif isinstance(base, ast.Attribute):
+                    current = base
+                else:
+                    current = base
+                    break
+
+            visible = [attr for attr in attrs if attr.attr not in INLINE_SUFFIXES]
+            if not visible:
+                continue
+            fluent = (len(visible) >= 2
+                      or any(attr.attr in {'builder', 'read', 'write'} for attr in visible))
+            if not fluent:
+                continue
+
+            root_anchor = self.start(current)
+            for attr in visible:
+                lo = self.end(attr.value) + 1
+                hi = self.end(attr) + 1
+                dot = next((i for i in range(lo, min(hi, len(self.ts)))
+                            if self.ts[i].string == '.'), None)
+                if dot is None or dot in planned or self.enclosing(dot) is None:
+                    continue
+                self.breaks[dot] = ('aligned_chain', root_anchor)
+                planned.add(dot)
 
     def plan_arithmetic(self, root):
         for expression in arithmetic_roots(root):
@@ -465,6 +498,7 @@ class Layout:
                                       if self.ts[j].string == ':'), None)
                         if colon is not None:
                             dict_colons.add(colon)
+
         result, rendered_positions, rendered_line_indents = '', {}, {}
         current_col = self.indent
         current_line_indent = self.indent
@@ -478,32 +512,37 @@ class Layout:
             gap = self.source[self.ends[i - 1]:self.starts[i]] if i else ''
             if i in dict_colons and '\n' not in gap:
                 gap = ''
+
             if i in self.breaks:
                 kind, anchor = self.breaks[i]
                 base = rendered_positions.get(anchor, self.indent)
                 anchor_line = rendered_line_indents.get(anchor, self.indent)
                 outer_anchor = anchor is not None and self.is_outer_group(anchor)
-                structural = anchor is not None and self.outer_group_ancestor(anchor) is not None
+
                 if kind == 'close':
-                    if outer_anchor:
-                        target = self.indent
-                    elif structural:
-                        target = anchor_line
-                    else:
-                        target = base
+                    # Every matching closer is vertically aligned with the
+                    # exact rendered column of its own opener, including the
+                    # outer RHS grouping parenthesis.
+                    target = base
                 elif kind == 'aligned_chain':
-                    target = anchor_line + self.opts['chainIndent'] if structural else base + self.opts['chainIndent']
+                    # The base expression starts at the structural outer-group
+                    # indentation; all fluent dots share one axis to its right.
+                    target = anchor_line + self.opts['chainIndent']
                 elif kind == 'outer':
                     target = self.indent + self.opts['outerIndent']
+                elif anchor is None:
+                    target = self.indent
+                elif outer_anchor:
+                    # Special case: a long assignment target must not push the
+                    # entire pipeline to the opener column. Only the outer
+                    # contents use structural indentation; its closer still
+                    # aligns with the actual '(' via the close rule above.
+                    target = self.indent + self.opts['outerIndent']
                 else:
-                    if anchor is None:
-                        target = self.indent
-                    elif outer_anchor:
-                        target = self.indent + self.opts['outerIndent']
-                    elif structural:
-                        target = anchor_line + self.opts['argumentIndent']
-                    else:
-                        target = base + self.opts['argumentIndent']
+                    # Inside the structural pipeline, nested delimiters keep
+                    # the exact rendered-column contract.
+                    target = base + self.opts['argumentIndent']
+
                 gap = ('' if i == 0 else '\n') + ' ' * target
                 set_line_start(target)
             elif '\n' in gap:
@@ -513,9 +552,11 @@ class Layout:
                 set_line_start(target)
             else:
                 current_col += len(gap)
+
             rendered_positions[i] = current_col
             rendered_line_indents[i] = current_line_indent
             result += gap + t.string
+
             if '\n' in t.string:
                 current_col = len(t.string.rsplit('\n', 1)[-1])
                 current_line_indent = 0
@@ -668,6 +709,7 @@ def format_statement(source, opts, indent):
     for _ in range(len(layout.ts) + 1):
         previous = dict(layout.breaks)
         layout.plan(root)
+        layout.plan_chain_alignment(root)
         layout.plan_arithmetic(root)
         layout.plan_comments()
         layout.plan_delimiter_alignment()
