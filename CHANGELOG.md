@@ -1,3 +1,9 @@
+# 0.6.10 — Simpler default shortcut
+
+- Changes the default **Clean Python Code: Format Selection** shortcut from `Ctrl + Alt + Shift + F` to `Ctrl + Alt + S`.
+- Keeps the formatter engine, Python-notebook language fallback, Unicode-whitespace sanitization and all 0.6.9 layout behavior unchanged.
+- The command id remains `cleanPythonCode.formatSelection`, so custom user keybindings remain compatible.
+
 # 0.6.9 — Reviewed screenshot layout + Python-notebook language fallback
 
 - Matches the three reviewed reference screenshots: the first fluent segment stays inline (`spark.read`, `DatabricksSession.builder`, `df_ai_requests.drop(...)`) and later segments align to the first dot.
