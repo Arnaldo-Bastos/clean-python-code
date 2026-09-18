@@ -247,12 +247,12 @@ class Layout:
                         first = node
                         while isinstance(first.func, ast.Attribute) and isinstance(first.func.value, ast.Call):
                             first = first.func.value
-                        if isinstance(first.func, ast.Attribute):
-                            first_dot = next((i for i in range(self.end(first.func.value) + 1, self.end(first.func) + 1)
-                                              if self.ts[i].string == '.'), self.start(first))
-                        else:
-                            first_dot = self.start(first)
-                        self.breaks[dot] = ('aligned_chain', first_dot)
+                        # Anchor every continuation dot to the rendered start
+                        # of the root expression, never to another dot. The old
+                        # self-referential first-dot anchor fell back to column
+                        # zero before that token had been rendered.
+                        first_anchor = self.start(first)
+                        self.breaks[dot] = ('aligned_chain', first_anchor)
             elif isinstance(node, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
                 self.comprehension(node)
             elif isinstance(node, (ast.List, ast.Tuple, ast.Set)):
